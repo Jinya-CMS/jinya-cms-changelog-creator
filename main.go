@@ -1,13 +1,9 @@
 package main
 
 import (
-	"bytes"
-	"encoding/json"
 	"github.com/andlabs/ui"
-	"io/ioutil"
-	"net/http"
-	url2 "net/url"
-	"text/template"
+	"jinya-changelog-creator/markdown"
+	"jinya-changelog-creator/youtrack"
 )
 
 var mainWindow *ui.Window
@@ -15,106 +11,30 @@ var versionsDropdown *ui.Combobox
 var markdownEntry *ui.MultilineEntry
 var generateChangelogButton *ui.Button
 
-var versionBundle VersionBundle
-
-type VersionBundleElement struct {
-	Id   string `json:"id"`
-	Name string `json:"name"`
-	Type string `json:"$type"`
-}
-
-type VersionBundle struct {
-	Values []VersionBundleElement `json:"values"`
-	Type   string                 `json:"$type"`
-}
-
-type Issue struct {
-	Summary string `json:"summary"`
-	Id      string `json:"idReadable"`
-	Type    string `json:"$type"`
-}
-
-type TemplateData struct {
-	Issues []Issue
-	Name   string
-}
-
-func loadVersions() {
-	resp, err := http.Get("https://jinya.myjetbrains.com/youtrack/api/admin/customFieldSettings/bundles/version/71-0?fields=values(id,name)")
-	if err != nil {
-		ui.MsgBoxError(mainWindow, "Unexpected Error", err.Error())
-		return
-	}
-
-	defer resp.Body.Close()
-
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		ui.MsgBoxError(mainWindow, "Unexpected Error", err.Error())
-		return
-	}
-
-	err = json.Unmarshal(body, &versionBundle)
-	if err != nil {
-		ui.MsgBoxError(mainWindow, "Unexpected Error", err.Error())
-		return
-	}
-
-	for _, version := range versionBundle.Values {
-		versionsDropdown.Append(version.Name)
-	}
-}
+var versions []youtrack.VersionBundleElement
 
 func generateChangeLog() {
-	version := versionBundle.Values[versionsDropdown.Selected()].Name
-	escapedPath := url2.PathEscape("query=project:JGCMS Fix versions:")
-	url := "https://jinya.myjetbrains.com/youtrack/api/issues?fields=summary,idReadable&" + escapedPath + version
-	resp, err := http.Get(url)
+	version := versions[versionsDropdown.Selected()].Name
+	issues, err := youtrack.LoadIssues(version)
+
 	if err != nil {
 		ui.MsgBoxError(mainWindow, "Unexpected Error", err.Error())
 		return
 	}
 
-	var issues []Issue
-	defer resp.Body.Close()
-
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		ui.MsgBoxError(mainWindow, "Unexpected Error", err.Error())
-		return
-	}
-
-	err = json.Unmarshal(body, &issues)
-	if err != nil {
-		ui.MsgBoxError(mainWindow, "Unexpected Error", err.Error())
-		return
-	}
-
-	markdownTemplate :=
-		`## Version {{.Name}}
-### New Features
-
-{{range .Issues}} * [{{.Id}}](https://jinya.myjetbrains.com/youtrack/issue/{{.Id}}) {{.Summary}}
-{{end}}`
-
-	templateData := TemplateData{
+	templateData := markdown.TemplateData{
 		Issues: issues,
 		Name:   version,
 	}
-	tmpl, err := template.New("markdown").Parse(markdownTemplate)
+
+	result, err := markdown.ConvertMarkdown(&templateData)
+
 	if err != nil {
 		ui.MsgBoxError(mainWindow, "Unexpected Error", err.Error())
 		return
 	}
 
-	var markdown bytes.Buffer
-	err = tmpl.Execute(&markdown, templateData)
-	if err != nil {
-		ui.MsgBoxError(mainWindow, "Unexpected Error", err.Error())
-		return
-	}
-
-	markdownEntry.SetText(markdown.String())
+	markdownEntry.SetText(result)
 }
 
 func setupUi() {
@@ -134,7 +54,18 @@ func setupUi() {
 
 	loadVersionsButton := ui.NewButton("Load Versions")
 	loadVersionsButton.OnClicked(func(button *ui.Button) {
-		go loadVersions()
+		versionBundle, err := youtrack.LoadVersions()
+
+		if err != nil {
+			ui.MsgBoxError(mainWindow, "Unexpected Error", err.Error())
+			return
+		}
+
+		for _, version := range versionBundle.Values {
+			versionsDropdown.Append(version.Name)
+		}
+
+		versions = versionBundle.Values
 	})
 
 	versionsDropdown.OnSelected(func(combobox *ui.Combobox) {
@@ -169,5 +100,9 @@ func setupUi() {
 }
 
 func main() {
-	ui.Main(setupUi)
+	err := ui.Main(setupUi)
+
+	if err != nil {
+		panic(err)
+	}
 }
