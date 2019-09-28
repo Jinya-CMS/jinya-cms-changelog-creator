@@ -8,7 +8,7 @@ import (
 func ConvertMarkdown(templateData *TemplateData) (string, error) {
 	markdownTemplate :=
 		`## Version {{.Name}}
-### New Features
+### Changes
 
 {{range .Issues}} * [{{.Id}}](https://jinya.myjetbrains.com/youtrack/issue/{{.Id}}) {{.Summary}}
 {{end}}`

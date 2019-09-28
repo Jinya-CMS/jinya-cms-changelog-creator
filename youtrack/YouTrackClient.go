@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"io/ioutil"
 	"net/http"
-	"net/url"
 )
 
 func LoadVersions() (*VersionBundle, error) {
@@ -31,8 +30,7 @@ func LoadVersions() (*VersionBundle, error) {
 }
 
 func LoadIssues(version string) ([]Issue, error) {
-	escapedPath := url.PathEscape("query=project:JGCMS Fix versions:")
-	requestUrl := "https://jinya.myjetbrains.com/youtrack/api/issues?fields=summary,idReadable&" + escapedPath + version
+	requestUrl := "https://jinya.myjetbrains.com/youtrack/api/issues?fields=summary%2CidReadable&query=project%3AJGCMS+Fix+versions:" + version
 	resp, err := http.Get(requestUrl)
 	if err != nil {
 		return nil, err
