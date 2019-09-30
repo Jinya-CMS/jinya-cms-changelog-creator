@@ -7,11 +7,11 @@ import (
 
 func ConvertMarkdown(templateData *TemplateData) (string, error) {
 	markdownTemplate :=
-		`## Version {{.Name}}
-### Changes
+		`### {{.Type}}
 
 {{range .Issues}} * [{{.Id}}](https://jinya.myjetbrains.com/youtrack/issue/{{.Id}}) {{.Summary}}
-{{end}}`
+{{end}}
+`
 
 	tmpl, err := template.New("markdown").Parse(markdownTemplate)
 	if err != nil {

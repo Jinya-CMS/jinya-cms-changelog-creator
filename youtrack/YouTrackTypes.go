@@ -16,3 +16,8 @@ type Issue struct {
 	Id      string `json:"idReadable"`
 	Type    string `json:"$type"`
 }
+
+type issueType struct {
+	Name string `json:"name"`
+	Type string `json:"$type"`
+}

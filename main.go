@@ -4,6 +4,7 @@ import (
 	"github.com/andlabs/ui"
 	"jinya-changelog-creator/markdown"
 	"jinya-changelog-creator/youtrack"
+	"sort"
 )
 
 var mainWindow *ui.Window
@@ -11,30 +12,65 @@ var versionsDropdown *ui.Combobox
 var markdownEntry *ui.MultilineEntry
 var generateChangelogButton *ui.Button
 
-var versions []youtrack.VersionBundleElement
+var versions []string
+
+func loadData() {
+	versionBundle, err := youtrack.LoadVersions()
+
+	if err != nil {
+		ui.MsgBoxError(mainWindow, "Unexpected Error", err.Error())
+		return
+	}
+
+	versions = make([]string, len(versionBundle.Values))
+
+	for idx, version := range versionBundle.Values {
+		versions[idx] = version.Name
+	}
+
+	sort.Strings(versions)
+
+	for _, version := range versions {
+		versionsDropdown.Append(version)
+	}
+}
 
 func generateChangeLog() {
-	version := versions[versionsDropdown.Selected()].Name
-	issues, err := youtrack.LoadIssues(version)
+	markdownEntry.SetText("")
+	version := versions[versionsDropdown.Selected()]
+	issueTypes, err := youtrack.LoadIssueTypes()
 
 	if err != nil {
 		ui.MsgBoxError(mainWindow, "Unexpected Error", err.Error())
 		return
 	}
 
-	templateData := markdown.TemplateData{
-		Issues: issues,
-		Name:   version,
+	markdownEntry.Append("## Version " + version)
+	markdownEntry.Append("\n")
+
+	for _, issueType := range issueTypes {
+		issues, err := youtrack.LoadIssues(version, issueType)
+
+		if err != nil {
+			ui.MsgBoxError(mainWindow, "Unexpected Error", err.Error())
+			return
+		}
+
+		if len(issues) > 0 {
+			templateData := markdown.TemplateData{
+				Issues: issues,
+				Type:   issueType,
+			}
+
+			result, err := markdown.ConvertMarkdown(&templateData)
+			if err != nil {
+				ui.MsgBoxError(mainWindow, "Unexpected Error", err.Error())
+				return
+			}
+
+			markdownEntry.Append(result)
+		}
 	}
-
-	result, err := markdown.ConvertMarkdown(&templateData)
-
-	if err != nil {
-		ui.MsgBoxError(mainWindow, "Unexpected Error", err.Error())
-		return
-	}
-
-	markdownEntry.SetText(result)
 }
 
 func setupUi() {
@@ -54,18 +90,7 @@ func setupUi() {
 
 	loadVersionsButton := ui.NewButton("Load Versions")
 	loadVersionsButton.OnClicked(func(button *ui.Button) {
-		versionBundle, err := youtrack.LoadVersions()
-
-		if err != nil {
-			ui.MsgBoxError(mainWindow, "Unexpected Error", err.Error())
-			return
-		}
-
-		for _, version := range versionBundle.Values {
-			versionsDropdown.Append(version.Name)
-		}
-
-		versions = versionBundle.Values
+		go loadData()
 	})
 
 	versionsDropdown.OnSelected(func(combobox *ui.Combobox) {
